@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "learner-insights.fullname" . }}-frontend
+  labels:
+    app: {{ include "learner-insights.name" . }}-frontend
+    tier: {{ include "learner-insights.name" . }}-frontend
+    environment: {{ .Values.environment }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "learner-insights.name" . }}-frontend
+  template:
+    metadata:
+      labels:
+        app: {{ include "learner-insights.name" . }}-frontend
+        tier: {{ include "learner-insights.name" . }}-frontend
+        environment: {{ .Values.environment }}
+    spec:
+      restartPolicy: {{ .Values.restartPolicy }}
+      containers:
+      - name: {{ include "learner-insights.name" . }}-frontend
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+          - containerPort: {{ .Values.containerPort }}
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}

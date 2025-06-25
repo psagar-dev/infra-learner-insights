@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "learner-insights.fullname" . }}-backend
+  labels:
+    app: {{ include "learner-insights.name" . }}-backend
+    tier: {{ include "learner-insights.name" . }}-backend
+    environment: {{ .Values.environment }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "learner-insights.name" . }}-backend
+  template:
+    metadata:
+      labels:
+        app: {{ include "learner-insights.name" . }}-backend
+        tier: {{ include "learner-insights.name" . }}-backend
+        environment: {{ .Values.environment }}
+    spec:
+      restartPolicy: {{ .Values.restartPolicy }}
+      containers:
+      - name: {{ include "learner-insights.name" . }}-backend
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ required "containerPort is required!" .Values.containerPort | int }}
+        envFrom:
+        - secretRef:
+            name: {{ .Values.secretRefName }}
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}

@@ -1,0 +1,61 @@
+# The environment (e.g., production, staging, development)
+environment: production
+nameOverride: "learner-insights"
+fullnameOverride: "learner-insights"
+
+# Docker image settings
+image:
+  repository: securelooper/learner-insights-backend
+  tag: latest # Change to a specific version/tag in production!
+  pullPolicy: Always
+
+# Number of backend pods to run
+replicaCount: 2
+
+# Pod container settings
+containerPort: 3001
+restartPolicy: Always
+
+# Kubernetes Service for the backend
+service: 
+  type: LoadBalancer
+  port: 3001
+  targetPort: 3001
+      
+# Kubernetes Secret Reference (if you store secrets in K8s)
+secretRefName: backend-secrets
+
+  # Direct secrets (prefer using sealed-secrets or external secrets in production)
+secret:
+  atlasUri: bW9uZ29kYjovL3Jvb3Q6cm9vdEAxOTIuMTY4LjMxLjEwMDoyNzAxNy9sZWFybmVyLWluc2lnaHRzP2F1dGhTb3VyY2U9YWRtaW4K
+  hashKey: dGhpc0lzTXlIYXNoS2V5Cg==
+  jwtSecretKey: dGhpc0lzTXlKd3RTZWNyZXRLZXkK
+  port: MzAwMQo=
+
+# Liveness probe for backend health
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3001
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 3
+  timeoutSeconds: 2
+
+# Readiness probe for backend readiness
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 3001
+  initialDelaySeconds: 40
+  periodSeconds: 5
+  failureThreshold: 3
+  timeoutSeconds: 2
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"

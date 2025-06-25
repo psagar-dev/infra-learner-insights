@@ -1,0 +1,115 @@
+pipeline { 
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                dir('learner-insights-backend') {
+                    git(
+                        url: "https://github.com/psagar-dev/learner-insights-backend.git",
+                        branch: 'main',
+                        credentialsId: 'Github'
+                    )
+                }
+                dir('learner-insights-frontend') {
+                    git(
+                        url: "https://github.com/psagar-dev/learner-insights-frontend.git",
+                        branch: 'main',
+                        credentialsId: 'Github'
+                    )
+                }
+                stash name: 'all-code', includes: '**'
+            }
+        }
+        stage("Test") {
+            parallel {
+                stage('Test Backend') { // Corrected: Backend first
+                    agent {
+                        docker {
+                            image 'node:22-slim'
+                        }
+                    }
+                    environment {
+                        NPM_CONFIG_CACHE = '.npm'
+                    }
+                    steps {
+                        unstash 'all-code'
+                        dir("learner-insights-backend") {
+                            sh 'npm install && npm test'
+                        }
+                    }
+                }
+                stage('Test Frontend') { // Corrected: Frontend second
+                    agent {
+                        docker {
+                            image 'node:22-slim'
+                        }
+                    }
+                    environment {
+                        NPM_CONFIG_CACHE = '.npm'
+                    }
+                    steps {
+                        unstash 'all-code'
+                        dir("learner-insights-frontend") {
+                            sh 'npm install && npx react-scripts test --watchAll=false'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build Image from Dockerfile') {
+            parallel {
+                stage('Build Backend Image') {
+                    steps {
+                        script {
+                            docker.build("securelooper/learner-insights-backend:${BUILD_NUMBER}", "./learner-insights-backend")
+                        }
+                    }
+                }
+                stage('Build Frontend Image') {
+                    steps {
+                        script {
+                            docker.build("securelooper/learner-insights-frontend:${BUILD_NUMBER}", "--build-arg REACT_APP_API_BASE_URL=http://192.168.31.100:3001 ./learner-insights-frontend")
+                        }
+                    }
+                }
+            }
+        }
+        stage('Push Docker Images') {
+            parallel {
+                stage('Build Backend Image') {
+                    steps {
+                        script {
+                            docker.withRegistry('', 'docker-hub-creds') {
+                                docker.image("securelooper/learner-insights-backend:${BUILD_NUMBER}").push()
+                            }
+                        }
+                    }
+                }
+                stage('Build Frontend Image') {
+                    steps {
+                        script {
+                            docker.withRegistry('', 'docker-hub-creds') {
+                                docker.image("securelooper/learner-insights-frontend:${BUILD_NUMBER}").push()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stage('Helm Deploy') {
+            steps {
+                sh """
+                    helm upgrade --install learner-insights-prod ./helm \
+                    -f ./helm/values.yaml \
+                    --set backend.image.repository=securelooper/learner-insights-backend \
+                    --set backend.image.tag=${BUILD_NUMBER} \
+                    --set frontend.image.repository=securelooper/learner-insights-frontend \
+                    --set frontend.image.tag=${BUILD_NUMBER} \
+                    --namespace learner-insights \
+                    --create-namespace
+                """
+            }
+        }
+    }
+}
