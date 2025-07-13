@@ -177,6 +177,168 @@ docker container run -d -p 3001:3001 --name learner-insights-backend -e ATLAS_UR
 
 ### ☸️ Steps to Deploy an Application on Kubernetes
 
+#### 🍃 MongoDB
+If using a local MongoDB instance, follow these steps:
+
+🗂️ 1. Create Secret
+📄 **File**: `k8s/mongo/mongo-secret.yaml`
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongo-secret
+  namespace: mongodb
+type: Opaque
+data:
+  MONGO_INITDB_ROOT_USERNAME: cm9vdA==
+  MONGO_INITDB_ROOT_PASSWORD: cm9vdA==
+```
+📌 **Apply Secret**
+
+```bash
+kubectl apply -f k8s/mongo/mongo-secret.yaml
+```
+🔍 **Verify Secret**
+```bash
+kubectl get secret -n mongodb
+```
+![secret for learner insights backend](images/mongo-secret.png)
+
+#### 📄 2 Create StatefulSet
+**File:** `k8s/mongo/mongo.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: mongodb
+spec:
+  serviceName: "mongo"         # headless service to enable stable DNS
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      terminationGracePeriodSeconds: 10 # recommended for MongoDB
+      containers:
+      - name: mongo
+        image: mongo:latest           # using official MongoDB image
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db     # Mongo data directory
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_INITDB_ROOT_PASSWORD
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+        livenessProbe:
+          exec:
+            command:
+              - mongosh
+              - --eval
+              - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+              - mongosh
+              - --eval
+              - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+          periodSeconds: 10
+  volumeClaimTemplates:
+  - metadata:
+      name: mongo-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+```
+
+📌 **Apply StatefulSet**
+```bash
+kubectl apply -f k8s/mongo/mongo.yaml
+```
+🔍 **Verify Pods**
+```bash
+kubectl get pods -n mongodb
+```
+📜 **View Logs to Confirm Communication**
+```
+kubectl logs statefulset/mongo -n mongodb
+```
+OR
+```
+kubectl logs pod/<pod_name> -n mongodb
+```
+![Mongo DB StateFul Set](images/statefulset-mondb.png)
+
+#### 📄 2 Create Service
+**File:** `k8s/mongo/mongo-service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: mongodb
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  clusterIP: None                # This makes it headless
+  selector:
+    app: mongo
+```
+
+📌 **Apply Service**
+```bash
+kubectl apply -f k8s/mongo/mongo-service.yaml
+```
+🔍 **Verify Service**
+```bash
+kubectl get svc -n mongodb
+```
+![svc for learner insights backend](images/mongo-svc.png)
+🔁 **Test Inter-Service Communication**
+
+Run a shell inside the user pod:
+```bash
+kubectl exec -it statefulset/mongo -n mongodb -- sh
+```
+From inside the pod, test communication:
+```bash
+mongosh mongo-0.mongo.mongodb.svc.cluster.local:27017/testdb -u root -p root --authenticationDatabase admin
+```
+![Terminal for mongodb](images/Terminal-for-mongodb.png)
+
+---
+
+#### 🛠️ Backend
 #### 🗂️ 1. Create Secret
 📄 **File**: `k8s/backend/secret.yaml`
 ```yaml
@@ -197,7 +359,7 @@ data:
 ```bash
 kubectl apply -f k8s/backend/secret.yaml
 ```
-🔍 **Verify ConfigMap**
+🔍 **Verify Secret**
 ```bash
 kubectl get secret -n learner-insights
 ```
