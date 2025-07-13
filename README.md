@@ -181,6 +181,7 @@ docker container run -d -p 3001:3001 --name learner-insights-backend -e ATLAS_UR
 If using a local MongoDB instance, follow these steps:
 
 🗂️ 1. Create Secret
+
 📄 **File**: `k8s/mongo/mongo-secret.yaml`
 ```yaml
 apiVersion: v1
